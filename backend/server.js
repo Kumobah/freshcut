@@ -5,6 +5,7 @@ import { randomUUID } from "node:crypto";
 const {
   MOMO_BASE_URL = "https://sandbox.momodeveloper.mtn.com",
   MOMO_ENV = "sandbox",
+  MOMO_CURRENCY = "EUR", // sandbox only accepts EUR; use GHS in production
   MOMO_SUBSCRIPTION_KEY, MOMO_API_USER, MOMO_API_KEY,
   ALLOWED_ORIGIN = "*", PORT = 3000
 } = process.env;
@@ -21,6 +22,27 @@ app.use(cors({ origin: ALLOWED_ORIGIN }));
 // In-memory store: fine for testing. Replace with a database before going live,
 // otherwise a server restart loses the link between orders and payments.
 const payments = new Map(); // orderId -> referenceId
+
+// Price list (per kg) lives on the server so the browser can never set its own price.
+// Keep ids and prices in sync with the shop page.
+const PRICES = {
+  "beef-stew": 85, "beef-steak": 130, "goat-leg": 110, "goat-ribs": 105,
+  "chick-whole": 60, "chick-thigh": 55, "pork-chop": 75, "pork-belly": 80
+};
+const DELIVERY_FEE = 15, MAX_KG_PER_ITEM = 20;
+
+// Returns the order total, or null if the basket is invalid
+function priceOrder(items) {
+  if (!Array.isArray(items) || items.length === 0 || items.length > 20) return null;
+  let total = 0;
+  for (const it of items) {
+    const price = PRICES[it && it.id];
+    const kg = Number(it && it.kg);
+    if (!price || !(kg > 0) || kg > MAX_KG_PER_ITEM || (kg * 2) % 1 !== 0) return null;
+    total += price * kg;
+  }
+  return total + DELIVERY_FEE;
+}
 
 // --- Access token, cached until shortly before expiry ---
 let token = null, tokenExp = 0;
@@ -44,11 +66,13 @@ const toMsisdn = p => { const d = String(p).replace(/\D/g, ""); return d.startsW
 // --- Start a payment: customer gets an approval prompt on their phone ---
 app.post("/pay", async (req, res) => {
   try {
-    const { amount, currency, phone, orderId } = req.body || {};
-    if (!(amount > 0) || !currency || !phone || !orderId) return res.status(400).json({ error: "Missing or invalid fields" });
+    const { items, phone, orderId } = req.body || {};
+    if (!phone || !/^[A-Za-z0-9-]{4,40}$/.test(String(orderId))) return res.status(400).json({ error: "Missing or invalid fields" });
+    const total = priceOrder(items);
+    if (total === null) return res.status(400).json({ error: "Invalid basket" });
 
     // Idempotent: a retried request for the same order must not charge twice
-    if (payments.has(orderId)) return res.json({ referenceId: payments.get(orderId) });
+    if (payments.has(orderId)) return res.json({ referenceId: payments.get(orderId), total });
 
     const referenceId = randomUUID();
     const r = await fetch(`${MOMO_BASE_URL}/collection/v1_0/requesttopay`, {
@@ -61,8 +85,8 @@ app.post("/pay", async (req, res) => {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        amount: String(amount),
-        currency,
+        amount: String(total),
+        currency: MOMO_CURRENCY,
         externalId: orderId,
         payer: { partyIdType: "MSISDN", partyId: toMsisdn(phone) },
         payerMessage: `Fresh Cut order ${orderId}`,
@@ -72,7 +96,7 @@ app.post("/pay", async (req, res) => {
     if (r.status !== 202) { console.error("requesttopay", r.status, await r.text()); return res.status(502).json({ error: "Payment request rejected" }); }
 
     payments.set(orderId, referenceId);
-    res.json({ referenceId });
+    res.json({ referenceId, total });
   } catch (e) { console.error(e); res.status(500).json({ error: "Server error" }); }
 });
 
