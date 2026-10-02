@@ -24,6 +24,7 @@ main{max-width:760px;margin:0 auto;padding:16px}
 .chip[aria-pressed=true]{background:var(--ink);color:#fff}
 .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
 .item{background:var(--card);border:1px solid var(--line);border-radius:6px 6px 22px 6px;padding:14px 14px 14px 20px;position:relative;border-left:8px solid var(--c)}
+.photo{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:4px;margin-bottom:10px;background:var(--line)}
 .item h3{font-size:1.15rem}
 .item p{margin:2px 0 10px;color:var(--muted);font-size:.9rem}
 .price{display:inline-block;background:var(--tag);font-family:"Bricolage Grotesque";font-weight:800;padding:3px 12px 3px 22px;clip-path:polygon(12px 0,100% 0,100% 100%,12px 100%,0 50%);}
@@ -57,7 +58,7 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid 
 
 <script>
 // ---- CONFIG: set API_BASE to your MoMo backend URL once deployed. Empty = simulated payment. ----
-const CONFIG = { API_BASE: "https://freshcut-8vde.onrender.com", CURRENCY: "EUR", DELIVERY_FEE: 15 };
+const CONFIG = { API_BASE: "https://freshcut-8vde.onrender.com", CURRENCY: "GHS", DELIVERY_FEE: 15 };
 
 const PRODUCTS = [
   {id:"beef-stew",  cat:"Beef",    name:"Beef stew cuts",   note:"Bone-in, diced",    price:85, c:"#8C2A33"},
@@ -92,13 +93,13 @@ async function requestToPay(order){
     return order.phone.endsWith("00") ? {status:"FAILED"} : {status:"SUCCESSFUL",ref:"SIM-"+Date.now().toString(36).toUpperCase()};
   }
   const r = await fetch(CONFIG.API_BASE+"/pay",{method:"POST",headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({amount:order.total,currency:CONFIG.CURRENCY,phone:order.phone,orderId:order.id})});
+    body:JSON.stringify({items:order.items.map(l=>({id:l.id,kg:l.kg})),phone:order.phone,orderId:order.id})});
   if(!r.ok) return {status:"FAILED"};
-  const {referenceId} = await r.json();
+  const {referenceId,total} = await r.json();
   for(let i=0;i<24;i++){            // poll up to ~60s while the customer approves on their phone
     await wait(2500);
     const s = await (await fetch(`${CONFIG.API_BASE}/pay/${referenceId}`)).json();
-    if(s.status!=="PENDING") return {status:s.status,ref:referenceId};
+    if(s.status!=="PENDING") return {status:s.status,ref:referenceId,total};
   }
   return {status:"TIMEOUT"};
 }
@@ -111,7 +112,7 @@ async function checkout(e){
   setPay("wait","Approval request sent to "+phone+". Confirm with your MoMo PIN on your phone.");
   $("#paybtn").disabled=true;
   const res=await requestToPay(order);
-  if(res.status==="SUCCESSFUL"){ S.last={...order,ref:res.ref}; S.cart={}; save(); S.view="done"; render(); }
+  if(res.status==="SUCCESSFUL"){ S.last={...order,ref:res.ref,total:res.total??order.total}; S.cart={}; save(); S.view="done"; render(); }
   else { $("#paybtn").disabled=false; setPay("err", res.status==="TIMEOUT"?"No approval received. You were not charged. Try again.":"Payment was declined. You were not charged. Check the number or try again."); }
 }
 function setPay(state,msg){ S.pay={state,msg}; const m=$("#paymsg"); if(m){m.className="msg "+state; m.textContent=msg;} }
@@ -120,6 +121,7 @@ function shop(){
   const list=PRODUCTS.filter(p=>S.cat==="All"||p.cat===S.cat);
   return `<div class="chips">${CATS.map(c=>`<button class="chip" aria-pressed="${S.cat===c}" onclick="setCat('${c}')">${c}</button>`).join("")}</div>
   <div class="grid">${list.map(p=>{const k=kgOf(p.id);return `<article class="item" style="--c:${p.c}">
+    <img class="photo" src="images/${p.id}.jpg" alt="${p.name}" loading="lazy" onerror="this.remove()">
     <h3>${p.name}</h3><p>${p.note}</p><span class="price">${money(p.price)} / kg</span>
     <div class="row">${k?`<div class="step"><button aria-label="Less ${p.name}" onclick="change('${p.id}',-0.5)">−</button><b>${k} kg</b><button aria-label="More ${p.name}" onclick="change('${p.id}',0.5)">+</button></div>`
     :`<button class="add" onclick="change('${p.id}',0.5)">Add 0.5 kg</button>`}</div></article>`}).join("")}</div>
