@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#6E1B28">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Fresh Cut Meats</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;800&family=Instrument+Sans:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--paper:#EEF0EB;--card:#FBFBF8;--ink:#1C2220;--muted:#5D6762;--blood:#6E1B28;--cold:#2D6A66;--tag:#F0C232;--line:#D3D8D1;--ok:#2E7D4F;--bad:#B3261E}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--paper);color:var(--ink);font:16px/1.5 "Instrument Sans",system-ui,sans-serif;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;margin:0;line-height:1.1}
+header{background:var(--blood);color:#fff;padding:18px 16px 16px;position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px}
+header h1{font-size:1.5rem;font-weight:800}
+header small{display:block;font-size:.8rem;opacity:.85}
+.cartbtn{background:var(--tag);color:var(--ink);border:0;border-radius:999px;padding:10px 16px;font:600 .95rem inherit;font-family:inherit;cursor:pointer}
+main{max-width:760px;margin:0 auto;padding:16px}
+.chips{display:flex;gap:8px;overflow-x:auto;padding-bottom:12px}
+.chip{flex:none;border:1.5px solid var(--ink);background:transparent;color:var(--ink);border-radius:999px;padding:6px 14px;font:inherit;cursor:pointer}
+.chip[aria-pressed=true]{background:var(--ink);color:#fff}
+.grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.item{background:var(--card);border:1px solid var(--line);border-radius:6px 6px 22px 6px;padding:14px 14px 14px 20px;position:relative;border-left:8px solid var(--c)}
+.item h3{font-size:1.15rem}
+.item p{margin:2px 0 10px;color:var(--muted);font-size:.9rem}
+.price{display:inline-block;background:var(--tag);font-family:"Bricolage Grotesque";font-weight:800;padding:3px 12px 3px 22px;clip-path:polygon(12px 0,100% 0,100% 100%,12px 100%,0 50%);}
+.row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:10px}
+.step{display:flex;align-items:center;gap:6px}
+.step button{width:36px;height:36px;border-radius:50%;border:1.5px solid var(--ink);background:#fff;font-size:1.2rem;cursor:pointer}
+.add{background:var(--cold);color:#fff;border:0;border-radius:6px;padding:9px 14px;font:600 .9rem inherit;font-family:inherit;cursor:pointer}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px}
+label{display:block;font-weight:600;margin:12px 0 4px}
+input,select{width:100%;padding:11px;border:1.5px solid var(--line);border-radius:6px;font:inherit;background:#fff}
+.hint{font-size:.85rem;color:var(--muted)}
+.line{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px dashed var(--line)}
+.total{font:800 1.3rem "Bricolage Grotesque"}
+.pay{width:100%;margin-top:14px;background:var(--blood);color:#fff;border:0;border-radius:8px;padding:14px;font:600 1.05rem inherit;font-family:inherit;cursor:pointer}
+.pay:disabled{opacity:.6}
+.link{background:none;border:0;color:var(--cold);font:inherit;text-decoration:underline;cursor:pointer;padding:0}
+.msg{padding:10px 12px;border-radius:6px;margin-top:12px}
+.msg.err{background:#F8DAD8;color:var(--bad)} .msg.wait{background:#FFF1BF}
+.ok{color:var(--ok)}
+.bar{position:sticky;bottom:0;background:var(--ink);color:#fff;padding:12px 16px;display:flex;justify-content:space-between;align-items:center}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid var(--cold);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Fresh Cut Meats</h1><small>Cut today. Delivered cold.</small></div>
+  <button class="cartbtn" id="cartbtn" onclick="go('cart')"></button>
+</header>
+<main id="app"></main>
+
+<script>
+// ---- CONFIG: set API_BASE to your MoMo backend URL once deployed. Empty = simulated payment. ----
+const CONFIG = { API_BASE: "", CURRENCY: "GHS", DELIVERY_FEE: 15 };
+
+const PRODUCTS = [
+  {id:"beef-stew",  cat:"Beef",    name:"Beef stew cuts",   note:"Bone-in, diced",    price:85, c:"#8C2A33"},
+  {id:"beef-steak", cat:"Beef",    name:"Sirloin steak",    note:"2 cm thick",        price:130,c:"#8C2A33"},
+  {id:"goat-leg",   cat:"Goat",    name:"Goat leg",         note:"Chopped for soup",  price:110,c:"#9A5B2E"},
+  {id:"goat-ribs",  cat:"Goat",    name:"Goat ribs",        note:"Good for grilling", price:105,c:"#9A5B2E"},
+  {id:"chick-whole",cat:"Chicken", name:"Whole chicken",    note:"Cleaned, plucked",  price:60, c:"#C79A2B"},
+  {id:"chick-thigh",cat:"Chicken", name:"Chicken thighs",   note:"Skin on",           price:55, c:"#C79A2B"},
+  {id:"pork-chop",  cat:"Pork",    name:"Pork chops",       note:"Bone-in",           price:75, c:"#B8697A"},
+  {id:"pork-belly", cat:"Pork",    name:"Pork belly",       note:"Skin on, slab",     price:80, c:"#B8697A"}
+];
+const CATS = ["All","Beef","Goat","Chicken","Pork"];
+
+let S = { view:"shop", cat:"All", cart:{}, pay:{state:"idle",msg:""}, last:null };
+try { S.cart = JSON.parse(localStorage.getItem("cart")||"{}"); } catch(e){}
+const $ = s => document.querySelector(s);
+const money = n => `${CONFIG.CURRENCY} ${n.toFixed(2)}`;
+const wait = ms => new Promise(r=>setTimeout(r,ms));
+const save = () => { try{localStorage.setItem("cart",JSON.stringify(S.cart))}catch(e){} };
+const kgOf = id => S.cart[id]||0;
+const lines = () => PRODUCTS.filter(p=>kgOf(p.id)>0).map(p=>({...p,kg:kgOf(p.id),sub:kgOf(p.id)*p.price}));
+const subtotal = () => lines().reduce((a,l)=>a+l.sub,0);
+
+function go(v){ S.view=v; S.pay={state:"idle",msg:""}; render(); window.scrollTo(0,0); }
+function setCat(c){ S.cat=c; render(); }
+function change(id,d){ const v=Math.max(0,Math.round((kgOf(id)+d)*2)/2); if(v) S.cart[id]=v; else delete S.cart[id]; save(); render(); }
+
+// ---- Payment adapter: swap simulation for the real backend without touching the UI ----
+async function requestToPay(order){
+  if(!CONFIG.API_BASE){
+    await wait(1800);
+    return order.phone.endsWith("00") ? {status:"FAILED"} : {status:"SUCCESSFUL",ref:"SIM-"+Date.now().toString(36).toUpperCase()};
+  }
+  const r = await fetch(CONFIG.API_BASE+"/pay",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({amount:order.total,currency:CONFIG.CURRENCY,phone:order.phone,orderId:order.id})});
+  if(!r.ok) return {status:"FAILED"};
+  const {referenceId} = await r.json();
+  for(let i=0;i<24;i++){            // poll up to ~60s while the customer approves on their phone
+    await wait(2500);
+    const s = await (await fetch(`${CONFIG.API_BASE}/pay/${referenceId}`)).json();
+    if(s.status!=="PENDING") return {status:s.status,ref:referenceId};
+  }
+  return {status:"TIMEOUT"};
+}
+
+async function checkout(e){
+  const name=$("#name").value.trim(), addr=$("#addr").value.trim(), phone=$("#phone").value.replace(/\s/g,""), slot=$("#slot").value;
+  if(!name||!addr) return setPay("err","Enter your name and delivery address.");
+  if(!/^0\d{9}$/.test(phone)) return setPay("err","Enter the 10-digit MTN MoMo number, for example 0241234567.");
+  const order={id:"FC"+Date.now().toString(36).toUpperCase(),name,addr,phone,slot,items:lines(),total:subtotal()+CONFIG.DELIVERY_FEE};
+  setPay("wait","Approval request sent to "+phone+". Confirm with your MoMo PIN on your phone.");
+  $("#paybtn").disabled=true;
+  const res=await requestToPay(order);
+  if(res.status==="SUCCESSFUL"){ S.last={...order,ref:res.ref}; S.cart={}; save(); S.view="done"; render(); }
+  else { $("#paybtn").disabled=false; setPay("err", res.status==="TIMEOUT"?"No approval received. You were not charged. Try again.":"Payment was declined. You were not charged. Check the number or try again."); }
+}
+function setPay(state,msg){ S.pay={state,msg}; const m=$("#paymsg"); if(m){m.className="msg "+state; m.textContent=msg;} }
+
+function shop(){
+  const list=PRODUCTS.filter(p=>S.cat==="All"||p.cat===S.cat);
+  return `<div class="chips">${CATS.map(c=>`<button class="chip" aria-pressed="${S.cat===c}" onclick="setCat('${c}')">${c}</button>`).join("")}</div>
+  <div class="grid">${list.map(p=>{const k=kgOf(p.id);return `<article class="item" style="--c:${p.c}">
+    <h3>${p.name}</h3><p>${p.note}</p><span class="price">${money(p.price)} / kg</span>
+    <div class="row">${k?`<div class="step"><button aria-label="Less ${p.name}" onclick="change('${p.id}',-0.5)">−</button><b>${k} kg</b><button aria-label="More ${p.name}" onclick="change('${p.id}',0.5)">+</button></div>`
+    :`<button class="add" onclick="change('${p.id}',0.5)">Add 0.5 kg</button>`}</div></article>`}).join("")}</div>
+  ${subtotal()?`<div class="bar" style="margin:16px -16px -16px"><span>${money(subtotal())}</span><button class="cartbtn" onclick="go('cart')">Review order</button></div>`:""}`;
+}
+function cart(){
+  const L=lines();
+  if(!L.length) return `<div class="panel"><h2>Your basket is empty</h2><p>Pick a cut to get started.</p><button class="add" onclick="go('shop')">Browse meat</button></div>`;
+  return `<button class="link" onclick="go('shop')">Keep shopping</button>
+  <div class="panel"><h2>Delivery and payment</h2>
+    ${L.map(l=>`<div class="line"><span>${l.name} · ${l.kg} kg</span><span>${money(l.sub)}</span></div>`).join("")}
+    <div class="line"><span>Delivery</span><span>${money(CONFIG.DELIVERY_FEE)}</span></div>
+    <div class="line total"><span>Total</span><span>${money(subtotal()+CONFIG.DELIVERY_FEE)}</span></div>
+    <label for="name">Name</label><input id="name" autocomplete="name">
+    <label for="addr">Delivery address</label><input id="addr" autocomplete="street-address">
+    <label for="slot">Delivery time</label>
+    <select id="slot"><option>Today, 12:00 to 14:00</option><option>Today, 16:00 to 18:00</option><option>Tomorrow morning</option></select>
+    <label for="phone">MTN MoMo number</label><input id="phone" inputmode="tel" placeholder="0241234567" autocomplete="tel">
+    <p class="hint">You will get an approval prompt on this number. Weights are adjusted at cutting, and you pay for the final weight.</p>
+    <div id="paymsg" class="msg ${S.pay.state}" role="status">${S.pay.msg}</div>
+    <button id="paybtn" class="pay" onclick="checkout()">Pay ${money(subtotal()+CONFIG.DELIVERY_FEE)} with MoMo</button>
+  </div>`;
+}
+function done(){
+  const o=S.last;
+  return `<div class="panel"><h2 class="ok">Payment received</h2><p>Order <b>${o.id}</b> is confirmed. ${o.slot}.</p>
+  ${o.items.map(l=>`<div class="line"><span>${l.name} · ${l.kg} kg</span><span>${money(l.sub)}</span></div>`).join("")}
+  <div class="line total"><span>Paid</span><span>${money(o.total)}</span></div>
+  <p class="hint">MoMo reference: ${o.ref}<br>Deliver to: ${o.addr}</p>
+  <button class="add" onclick="go('shop')">Order again</button></div>`;
+}
+function render(){
+  const n=Object.keys(S.cart).length;
+  $("#cartbtn").textContent = n?`Basket (${n}) · ${money(subtotal())}`:"Basket";
+  $("#app").innerHTML = ({shop,cart,done})[S.view]();
+}
+render();
+</script>
+</body>
+</html>
